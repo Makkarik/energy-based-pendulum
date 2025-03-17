@@ -1,0 +1,44 @@
+[tool.poetry]
+name = "energy-based-ppo"
+version = "0.0.1"
+description = "Energy-based reward and PPO. What could possibly go wrong?"
+authors = [
+  "Makar Korchagin", 
+  "Ilya Zherebtsov",
+  "Rinat Prochii",
+  "Aibek Akhmetkazy",
+  "Mikhail Gubanov"
+]
+readme = "README.md"
+license = "MIT"
+homepage = "https://github.com/Makkarik/energy-based-ppo"
+repository = "https://github.com/Makkarik/energy-based-ppo"
+
+package-mode = false
+
+[tool.poetry.dependencies]
+python = "^3.12"
+numpy = "^2.2.2"
+pygame = "^2.6.1"
+gymnasium = {extras = ["mujoco"], version = "^1.0.0"}
+ipykernel = "^6.29.5"
+tqdm = "^4.67.1"
+seaborn = "^0.13.2"
+moviepy = "^2.1.2"
+torch = {version = "2.6.0", source = "torch"}
+
+[[tool.poetry.source]]
+name = "torch"
+url = "https://download.pytorch.org/whl/cu126"
+priority = "explicit"
+
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.ruff]
+line-length = 88
+target-version = "py312" 
+fix = true
+preview = true
