@@ -1,6 +1,7 @@
 import numpy as np
 
 ELEMENTS = 3
+CHECK_VALUE = 11.772
 
 class EnergyReward:
     def __init__(
@@ -22,7 +23,7 @@ class EnergyReward:
 
     def __call__(self, observation: np.ndarray) -> float:
         """Calculate the energy-based reward."""
-        sin1, sin2, cos1, cos2, dx, dtheta1, dtheta2 = observation[1:-3]
+        sin1, sin2, cos1, cos2, dx, dtheta1, dtheta2 = observation[1:-1]
 
         e_t = np.zeros(shape=ELEMENTS)
         e_v = np.zeros(shape=ELEMENTS)
@@ -30,7 +31,9 @@ class EnergyReward:
         # Calculate potential energies of the cart, first and second poles
         e_v[0] = 0
         e_v[1] = self._mass1 * self._g * self._length1 / 2 * cos1
-        e_v[2] = self._mass2 * self._g * self._length2 / 2 * cos2 + self._length1 * cos1
+        e_v[2] = self._mass2 * self._g * (
+            self._length2 / 2 * cos2 + self._length1 * cos1
+            )
 
         cos_diff = cos1 * cos2 + sin1 * sin2
         # Calculate the kinetic energies of the corresponding elements
@@ -43,3 +46,14 @@ class EnergyReward:
 
         return e_v.sum() - e_t.sum()
 
+
+if __name__ == "__main__":
+    reward = EnergyReward()
+    best_obs = np.zeros(shape=9)
+    best_obs[3:5] = 1
+    max_reward = reward(best_obs)
+    if max_reward - CHECK_VALUE < 1e-6:
+        print(f"Maximum energy reward for default config is {max_reward:.3f}")
+    else:
+        msg = f"Unit test has been failed. Got {max_reward} instead of {CHECK_VALUE}!"
+        raise AssertionError(msg)
