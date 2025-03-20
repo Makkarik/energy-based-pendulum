@@ -44,7 +44,7 @@ class EnergyReward:
             dtheta1**2 + dtheta2**2 / 4 + dtheta1 * dtheta2 * cos_diff
             )
 
-        return e_v.sum() - e_t.sum()
+        return np.sum(e_v - e_t)
 
 
 if __name__ == "__main__":
@@ -52,7 +52,7 @@ if __name__ == "__main__":
     best_obs = np.zeros(shape=9)
     best_obs[3:5] = 1
     max_reward = reward(best_obs)
-    if max_reward - CHECK_VALUE < 1e-6:
+    if max_reward - CHECK_VALUE < 1e-9:
         print(f"Maximum energy reward for default config is {max_reward:.3f}")
     else:
         msg = f"Unit test has been failed. Got {max_reward} instead of {CHECK_VALUE}!"

@@ -8,7 +8,7 @@ from tqdm import trange
 from reward import EnergyReward
 from utils import mp4_to_gif
 
-EPISODES = 10000
+EPISODES = 1000
 EPISODE_LENGTH = 1000
 FOLDER = "./results"
 SEED = 42
