@@ -1,12 +1,17 @@
-import warnings
-import matplotlib.pyplot as plt
-import torch
+import os
 import csv
-from torch import multiprocessing
+import imageio
+from tqdm import tqdm
+import matplotlib.pyplot as plt
 from collections import defaultdict
+
+import torch
+from torch import nn
+from torch import multiprocessing
+
 from tensordict.nn import TensorDictModule
 from tensordict.nn.distributions import NormalParamExtractor
-from torch import nn
+
 from torchrl.collectors import SyncDataCollector
 from torchrl.data.replay_buffers import ReplayBuffer
 from torchrl.data.replay_buffers.samplers import SamplerWithoutReplacement
@@ -18,9 +23,9 @@ from torchrl.envs.utils import check_env_specs, ExplorationType, set_exploration
 from torchrl.modules import ProbabilisticActor, TanhNormal, ValueOperator
 from torchrl.objectives import ClipPPOLoss
 from torchrl.objectives.value import GAE
-from tqdm import tqdm
-warnings.filterwarnings("ignore")
 
+import warnings
+warnings.filterwarnings("ignore")
 
 def run_pipeline():
     # https://pytorch.org/tutorials/intermediate/reinforcement_ppo.html
@@ -36,7 +41,7 @@ def run_pipeline():
 
     frames_per_batch = 1000
     # For a complete training, bring the number of frames up to 1M
-    total_frames = 500_000
+    total_frames = 1_000
 
     sub_batch_size = 64  # cardinality of the sub-samples gathered from the current data in the inner loop
     num_epochs = 10  # optimization steps per batch of data collected
@@ -223,6 +228,8 @@ def run_pipeline():
         # this is a nice-to-have but nothing necessary for PPO to work.
         scheduler.step()
 
+    save_animation(policy_module, env, device)
+    
     return logs
 
 
@@ -282,7 +289,95 @@ def log_episodes_to_csv(logs, filename):
                 'eval_duration': eval_duration
             })
 
+def save_animation(policy_module, training_env, device, num_episodes=1, filename_prefix="pendulum"):
+    """
+    Save animations of trained policy during both training and evaluation.
+    
+    Args:
+        policy_module: The trained policy module
+        training_env: The training environment (to get normalization stats)
+        device: The device to run the environment on
+        num_episodes: Number of episodes to record for each animation
+        filename_prefix: Prefix for the output filenames
+    
+    Returns:
+        dict: Paths to the created animation files
+    """
+    
+    # Create directory for animations if it doesn't exist
+    os.makedirs("animations", exist_ok=True)
+    
+    # Function to render and collect frames
+    def collect_frames(env, policy, max_steps, exploration_type):
+        with set_exploration_type(exploration_type), torch.no_grad():
+            frames = []
+            tensordict = env.reset()
+            
+            # Run the episode
+            done = False
+            step = 0
+            
+            while not done and step < max_steps:
+                # Get the frame before taking action
+                frame = env.base_env.render()
+                frames.append(frame)
+                
+                # Take action
+                action = policy(tensordict)
+                tensordict = env.step(action)
+                
+                done = tensordict.get(("next", "done"), False).item()
+                step += 1
+            
+            return frames
+    
+    # Create a new environment with render_mode for animations
+    base_env = GymEnv("InvertedDoublePendulum-v4", device=device, render_mode="rgb_array")
+    
+    env = TransformedEnv(
+        base_env,
+        Compose(
+            ObservationNorm(in_keys=["observation"]),
+            DoubleToFloat(),
+            StepCounter(),
+        ),
+    )
+    
+    # Copy normalization stats from training environment
+    env.transform[0].loc = training_env.transform[0].loc.clone()
+    env.transform[0].scale = training_env.transform[0].scale.clone()
+    
+    print("\nCreating animations...")
+    
+    # Save evaluation runs (deterministic policy)
+    eval_frames_collection = []
+    for episode in range(num_episodes):
+        frames = collect_frames(
+            env, 
+            policy_module, 
+            max_steps=1000, 
+            exploration_type=ExplorationType.DETERMINISTIC
+        )
+        eval_frames_collection.append(frames)
+        
+        # Save each episode separately (uncomment if needed)
+        # eval_filename = f"animations/{filename_prefix}_evaluation_episode_{episode+1}.gif"
+        # imageio.mimsave(eval_filename, frames, fps=30)
+        # print(f"Saved evaluation animation to {eval_filename}")
+    
+    # Create a combined animation with all episodes
+    combined_eval_filename = f"animations/{filename_prefix}_evaluation_combined.gif"
+    
+    # Flatten the list of frames
+    all_eval_frames = [frame for episode_frames in eval_frames_collection for frame in episode_frames]
+    
+    # Save combined animations
+    imageio.mimsave(combined_eval_filename, all_eval_frames, fps=30)
+    
+    print(f"Saved combined evaluation animation to {combined_eval_filename}")
 
-logs = run_pipeline()
-plot_results(logs)
-log_episodes_to_csv(logs, "training_log.csv")
+
+if __name__ == '__main__':
+    logs = run_pipeline()
+    plot_results(logs)
+    log_episodes_to_csv(logs, "training_log.csv")
