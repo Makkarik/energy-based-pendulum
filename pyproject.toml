@@ -20,7 +20,7 @@ package-mode = false
 python = "^3.12"
 numpy = "^2.2.2"
 pygame = "^2.6.1"
-gymnasium = {extras = ["mujoco"], version = "0.27.0"}
+gymnasium = {extras = ["mujoco"], version = "^1.0.0"}
 ipykernel = "^6.29.5"
 tqdm = "^4.67.1"
 seaborn = "^0.13.2"
