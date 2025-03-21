@@ -12,7 +12,6 @@ from torch.utils.data import DataLoader, TensorDataset
 from tqdm import trange
 
 from .reward import EnergyReward
-from .utils import mp4_to_gif
 
 # Set random seeds for reproducibility
 SEED = 42
@@ -80,7 +79,7 @@ class PPO:
         ppo_epochs=10,
         mini_batch_size=64,
         entropy_coef=0.01,
-        value_coef=0.5
+        value_coef=0.5,
     ):
         self.gamma = gamma
         self.tau = tau
@@ -92,10 +91,10 @@ class PPO:
 
         self.policy = PolicyNetwork(state_dim, action_dim, hidden_dim)
         self.value = ValueNetwork(state_dim, hidden_dim)
-        
+
         self.optimizer = torch.optim.Adam([
-            {'params': self.policy.parameters(), 'lr': lr},
-            {'params': self.value.parameters(), 'lr': lr}
+            {"params": self.policy.parameters(), "lr": lr},
+            {"params": self.value.parameters(), "lr": lr},
         ])
 
     def compute_advantages(self, rewards, values, masks):
@@ -128,64 +127,77 @@ class PPO:
             values = self.value(states)
             advantages, returns = self.compute_advantages(rewards, values, masks)
             advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
-        
+
         # Get old log probabilities
         with torch.no_grad():
             old_log_probs = self.policy.log_prob(states, actions)
-        
+
         # Create dataset and dataloader for mini-batch updates
         dataset = TensorDataset(states, actions, old_log_probs, advantages, returns)
         dataloader = DataLoader(dataset, batch_size=self.mini_batch_size, shuffle=True)
-        
+
         # Track metrics
         policy_loss_epoch = 0
         value_loss_epoch = 0
         entropy_epoch = 0
         kl_epoch = 0
-        
+
         # PPO update loop
         for _ in range(self.ppo_epochs):
-            for batch_states, batch_actions, batch_old_log_probs, batch_advantages, batch_returns in dataloader:
+            for (
+                batch_states,
+                batch_actions,
+                batch_old_log_probs,
+                batch_advantages,
+                batch_returns,
+            ) in dataloader:
                 # Policy loss
                 log_probs = self.policy.log_prob(batch_states, batch_actions)
                 ratio = torch.exp(log_probs - batch_old_log_probs)
-                
+
                 # Calculate KL divergence (for logging only)
                 kl_div = (batch_old_log_probs - log_probs).mean().item()
-                
+
                 # Clipped policy objective
                 surrogate1 = ratio * batch_advantages
-                surrogate2 = torch.clamp(ratio, 1 - self.clip_param, 1 + self.clip_param) * batch_advantages
+                surrogate2 = (
+                    torch.clamp(ratio, 1 - self.clip_param, 1 + self.clip_param)
+                    * batch_advantages
+                )
                 policy_loss = -torch.min(surrogate1, surrogate2).mean()
-                
+
                 # Value loss
                 value_pred = self.value(batch_states)
                 value_loss = F.mse_loss(value_pred, batch_returns)
-                
+
                 # Entropy bonus
                 entropy = self.policy.entropy(batch_states).mean()
-                
+
                 # Total loss
-                loss = policy_loss + self.value_coef * value_loss - self.entropy_coef * entropy
-                
+                loss = (
+                    policy_loss
+                    + self.value_coef * value_loss
+                    - self.entropy_coef * entropy
+                )
+
                 # Update networks
                 self.optimizer.zero_grad()
                 loss.backward()
                 self.optimizer.step()
-                
+
                 # Track metrics
                 policy_loss_epoch += policy_loss.item()
                 value_loss_epoch += value_loss.item()
                 entropy_epoch += entropy.item()
                 kl_epoch += kl_div
-        
+
         # Average metrics over all batches
         num_batches = len(dataloader) * self.ppo_epochs
         return {
             "policy_loss": policy_loss_epoch / num_batches,
             "value_loss": value_loss_epoch / num_batches,
             "entropy": entropy_epoch / num_batches,
-            "kl": kl_epoch / num_batches
+            "kl": kl_epoch / num_batches,
         }
 
 
@@ -250,7 +262,11 @@ def collect_trajectories(env, agent, energy_reward_calculator, num_steps=2048):
 
 
 def train_ppo(
-    env_name, num_epochs=500, steps_per_epoch=4096, gamma=0.99, save_freq=10, typeOfReward='rewards'
+    env_name,
+    num_epochs=500,
+    steps_per_epoch=4096,
+    gamma=0.99,
+    reward_type="rewards",
 ):
     # Create environment
     env = gym.make(env_name)
@@ -268,7 +284,7 @@ def train_ppo(
 
     # Create CSV logger
     os.makedirs("./results", exist_ok=True)
-    csv_file = open("./results/ppo-train-energy.csv", "w", newline="")
+    csv_file = open(f"./results/ppo-train-{reward_type}.csv", "w", newline="")
     csv_writer = csv.writer(csv_file)
     csv_writer.writerow([
         "epoch",
@@ -292,7 +308,7 @@ def train_ppo(
         update_info = agent.update(
             trajectories["states"],
             trajectories["actions"],
-            trajectories[typeOfReward],
+            trajectories[reward_type],
             trajectories["masks"],
         )
 
@@ -325,7 +341,9 @@ def train_ppo(
     env.close()
 
 
-def evaluate(env_name, agent, num_episodes=10, record_video=True):
+def evaluate(
+    env_name, agent, num_episodes: int = 10, record_video: bool = True, reward_type: str = "reward"
+):
     # Create environment
     if record_video:
         env = gym.make(env_name, render_mode="rgb_array")
@@ -357,7 +375,9 @@ def evaluate(env_name, agent, num_episodes=10, record_video=True):
             # Use deterministic action for evaluation
             with torch.no_grad():
                 action = (
-                    agent.policy.get_action(torch.FloatTensor(state), deterministic=True)
+                    agent.policy.get_action(
+                        torch.FloatTensor(state), deterministic=True
+                    )
                     .detach()
                     .numpy()
                 )
@@ -382,7 +402,7 @@ def evaluate(env_name, agent, num_episodes=10, record_video=True):
     data["length"] = episode_lengths
     data["reward"] = episode_rewards
     data["energy"] = episode_energy_rewards
-    data.to_csv("./results/ppo-eval-energy.csv", index=False)
+    data.to_csv(f"./results/ppo-eval-{reward_type}.csv", index=False)
 
     # Calculate average metrics
     avg_reward = np.mean(episode_rewards)
