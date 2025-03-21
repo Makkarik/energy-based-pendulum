@@ -430,26 +430,3 @@ def load_model(path, env_name):
     agent.policy.load_state_dict(checkpoint["policy"])
     agent.value.load_state_dict(checkpoint["value"])
     return agent
-
-
-# if __name__ == "__main__":
-#     ENV_NAME = "InvertedDoublePendulum-v5"
-
-#     # Create directories
-#     os.makedirs("logs", exist_ok=True)
-#     os.makedirs("models", exist_ok=True)
-#     os.makedirs("videos", exist_ok=True)
-#     os.makedirs("results", exist_ok=True)
-
-#     # Training phase
-#     print("Starting training...")
-#     agent = train_ppo(
-#         ENV_NAME, num_epochs=300, steps_per_epoch=4096, save_freq=100, gamma=0.99
-#     )
-
-#     # Evaluation phase
-#     print("\nStarting evaluation with video recording...")
-#     evaluate(ENV_NAME, agent, num_episodes=1000, record_video=True)
-
-#     print("Training and evaluation completed!")
-#     mp4_to_gif("./results")

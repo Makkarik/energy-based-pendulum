@@ -11,7 +11,6 @@ from torch.distributions import Normal
 from tqdm import trange
 
 from .reward import EnergyReward
-from .utils import mp4_to_gif
 
 # Set random seeds for reproducibility
 SEED = 42
@@ -300,8 +299,7 @@ def collect_trajectories(env, agent, energy_reward_calculator, num_steps=2048):
 
 
 def train_trpo(
-    env_name, num_epochs=500, steps_per_epoch=4096, gamma=0.99, save_freq=10,
-    reward_type='reward'
+    env_name, num_epochs=500, steps_per_epoch=4096, gamma=0.99, reward_type='reward'
 ):
     # Create environment
     env = gym.make(env_name)
@@ -461,26 +459,3 @@ def load_model(path, env_name):
     agent.policy.load_state_dict(checkpoint["policy"])
     agent.value.load_state_dict(checkpoint["value"])
     return agent
-
-
-
-if __name__ == "__main__":
-    ENV_NAME = "InvertedDoublePendulum-v5"
-
-    # Create directories
-    os.makedirs("logs", exist_ok=True)
-    os.makedirs("models", exist_ok=True)
-    os.makedirs("videos", exist_ok=True)
-
-    # Training phase
-    print("Starting training...")
-    agent = train_trpo(
-        ENV_NAME, num_epochs=300, steps_per_epoch=4096, save_freq=100, gamma=0.99
-    )
-
-    # Evaluation phase
-    print("\nStarting evaluation with video recording...")
-    evaluate(ENV_NAME, agent, num_episodes=1000, record_video=True)
-
-    print("Training and evaluation completed!")
-    mp4_to_gif("./results")
