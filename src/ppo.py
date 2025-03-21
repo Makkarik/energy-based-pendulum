@@ -11,8 +11,8 @@ from torch.distributions import Normal
 from torch.utils.data import DataLoader, TensorDataset
 from tqdm import trange
 
-from reward import EnergyReward
-from utils import mp4_to_gif
+from .reward import EnergyReward
+from .utils import mp4_to_gif
 
 # Set random seeds for reproducibility
 SEED = 42
@@ -250,7 +250,7 @@ def collect_trajectories(env, agent, energy_reward_calculator, num_steps=2048):
 
 
 def train_ppo(
-    env_name, num_epochs=500, steps_per_epoch=4096, gamma=0.99, save_freq=10
+    env_name, num_epochs=500, steps_per_epoch=4096, gamma=0.99, save_freq=10, typeOfReward='rewards'
 ):
     # Create environment
     env = gym.make(env_name)
@@ -292,7 +292,7 @@ def train_ppo(
         update_info = agent.update(
             trajectories["states"],
             trajectories["actions"],
-            trajectories["rewards"],
+            trajectories[typeOfReward],
             trajectories["masks"],
         )
 
@@ -323,7 +323,6 @@ def train_ppo(
 
     csv_file.close()
     env.close()
-    return agent
 
 
 def evaluate(env_name, agent, num_episodes=10, record_video=True):
@@ -399,7 +398,13 @@ def evaluate(env_name, agent, num_episodes=10, record_video=True):
     return avg_reward, avg_energy_reward, avg_length
 
 
-def load_model(path, state_dim, action_dim):
+def load_model(path, env_name):
+    env = gym.make(env_name)
+
+    # Get dimensions
+    state_dim = env.observation_space.shape[0]
+    action_dim = env.action_space.shape[0]
+
     agent = PPO(state_dim, action_dim)
     checkpoint = torch.load(path)
     agent.policy.load_state_dict(checkpoint["policy"])
@@ -407,24 +412,24 @@ def load_model(path, state_dim, action_dim):
     return agent
 
 
-if __name__ == "__main__":
-    ENV_NAME = "InvertedDoublePendulum-v5"
+# if __name__ == "__main__":
+#     ENV_NAME = "InvertedDoublePendulum-v5"
 
-    # Create directories
-    os.makedirs("logs", exist_ok=True)
-    os.makedirs("models", exist_ok=True)
-    os.makedirs("videos", exist_ok=True)
-    os.makedirs("results", exist_ok=True)
+#     # Create directories
+#     os.makedirs("logs", exist_ok=True)
+#     os.makedirs("models", exist_ok=True)
+#     os.makedirs("videos", exist_ok=True)
+#     os.makedirs("results", exist_ok=True)
 
-    # Training phase
-    print("Starting training...")
-    agent = train_ppo(
-        ENV_NAME, num_epochs=300, steps_per_epoch=4096, save_freq=100, gamma=0.99
-    )
+#     # Training phase
+#     print("Starting training...")
+#     agent = train_ppo(
+#         ENV_NAME, num_epochs=300, steps_per_epoch=4096, save_freq=100, gamma=0.99
+#     )
 
-    # Evaluation phase
-    print("\nStarting evaluation with video recording...")
-    evaluate(ENV_NAME, agent, num_episodes=1000, record_video=True)
+#     # Evaluation phase
+#     print("\nStarting evaluation with video recording...")
+#     evaluate(ENV_NAME, agent, num_episodes=1000, record_video=True)
 
-    print("Training and evaluation completed!")
-    mp4_to_gif("./results")
+#     print("Training and evaluation completed!")
+#     mp4_to_gif("./results")
