@@ -10,8 +10,8 @@ import torch.nn.functional as F
 from torch.distributions import Normal
 from tqdm import trange
 
-from reward import EnergyReward
-from utils import mp4_to_gif
+from .reward import EnergyReward
+from .utils import mp4_to_gif
 
 # Set random seeds for reproducibility
 SEED = 42
@@ -300,7 +300,8 @@ def collect_trajectories(env, agent, energy_reward_calculator, num_steps=2048):
 
 
 def train_trpo(
-    env_name, num_epochs=500, steps_per_epoch=4096, gamma=0.99, save_freq=10
+    env_name, num_epochs=500, steps_per_epoch=4096, gamma=0.99, save_freq=10,
+    reward_type='reward'
 ):
     # Create environment
     env = gym.make(env_name)
@@ -317,7 +318,8 @@ def train_trpo(
     best_reward = -np.inf
 
     # Create CSV logger
-    csv_file = open("./results/trpo-train-energy.csv", "w", newline="")
+    os.makedirs("./results", exist_ok=True)
+    csv_file = open(f"./results/trpo-train-{reward_type}.csv", "w", newline="")
     csv_writer = csv.writer(csv_file)
     csv_writer.writerow([
         "epoch",
@@ -341,7 +343,7 @@ def train_trpo(
         update_info = agent.update(
             trajectories["states"],
             trajectories["actions"],
-            trajectories["rewards"],
+            trajectories[reward_type],
             trajectories["masks"],
         )
 
@@ -360,14 +362,6 @@ def train_trpo(
         csv_file.flush()
 
         # Save model periodically
-        if epoch % save_freq == 0 or epoch == num_epochs - 1:
-            torch.save(
-                {
-                    "policy": agent.policy.state_dict(),
-                    "value": agent.value.state_dict(),
-                },
-                f"./models/trpo-{epoch}.pt",
-            )
         if np.mean(trajectories["rewards"]) > best_reward:
             best_reward = np.mean(trajectories["rewards"])
             torch.save(
@@ -380,10 +374,9 @@ def train_trpo(
 
     csv_file.close()
     env.close()
-    return agent
 
 
-def evaluate(env_name, agent, num_episodes=10, record_video=True):
+def evaluate(env_name, agent, num_episodes=10, record_video=True, reward_type: str = "reward"):
     # Create environment
     if record_video:
         env = gym.make(env_name, render_mode="rgb_array")
@@ -439,7 +432,7 @@ def evaluate(env_name, agent, num_episodes=10, record_video=True):
     data["length"] = episode_lengths
     data["reward"] = episode_rewards
     data["energy"] = episode_energy_rewards
-    data.to_csv("./results/trpo-eval-energy.csv", index=False)
+    data.to_csv(f"./results/trpo-eval-{reward_type}.csv", index=False)
 
     # Calculate average metrics
     avg_reward = np.mean(episode_rewards)
@@ -455,12 +448,20 @@ def evaluate(env_name, agent, num_episodes=10, record_video=True):
     return avg_reward, avg_energy_reward, avg_length
 
 
-def load_model(path, state_dim, action_dim):
+
+def load_model(path, env_name):
+    env = gym.make(env_name)
+
+    # Get dimensions
+    state_dim = env.observation_space.shape[0]
+    action_dim = env.action_space.shape[0]
+
     agent = TRPO(state_dim, action_dim)
     checkpoint = torch.load(path)
     agent.policy.load_state_dict(checkpoint["policy"])
     agent.value.load_state_dict(checkpoint["value"])
     return agent
+
 
 
 if __name__ == "__main__":
