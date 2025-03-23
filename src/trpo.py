@@ -67,6 +67,7 @@ class TRPO:
         tau: float = 0.95,
         delta: float = 0.01,
         damping: float = 0.1,
+        value_updates: int = 5,
         cg_iters: int = 10,
         backtrack_iters: int = 10,
         backtrack_coeff: float = 0.8,
@@ -75,6 +76,7 @@ class TRPO:
         self.tau = tau
         self.delta = delta
         self.damping = damping
+        self.value_updates = value_updates
         self.cg_iters = cg_iters
         self.backtrack_iters = backtrack_iters
         self.backtrack_coeff = backtrack_coeff
@@ -150,21 +152,24 @@ class TRPO:
         masks = torch.FloatTensor(masks)
 
         # Update value function
-        values = self.value(states)
+        with torch.no_grad():
+            values = self.value(states)
         advantages, returns = self._compute_advantages(rewards, values, masks)
         advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
 
         # Value loss
-        value_loss = -F.mse_loss(self.value(states), returns)
-        self.value_optimizer.zero_grad()
-        value_loss.backward()
-        self.value_optimizer.step()
+        for _ in range(self.value_updates):
+            value_loss = F.mse_loss(self.value(states), returns)
+            self.value_optimizer.zero_grad()
+            value_loss.backward()
+            self.value_optimizer.step()
 
         # Policy gradient
         old_policy = PolicyNetwork(states.shape[1], actions.shape[1])
         old_policy.load_state_dict(self.policy.state_dict())
 
-        old_log_probs = old_policy.log_prob(states, actions).detach()
+        with torch.no_grad():
+            old_log_probs = old_policy.log_prob(states, actions).detach()
 
         # Compute policy gradient
         loss = self._surrogate_loss(states, actions, advantages, old_log_probs)
