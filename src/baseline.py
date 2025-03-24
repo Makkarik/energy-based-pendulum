@@ -15,6 +15,19 @@ SEED = 42
 
 
 def main():
+    """
+    Main function to run the random agent on the InvertedDoublePendulum-v5 environment.
+
+    This function performs the following steps:
+    1. Creates a folder for storing results.
+    2. Defines the environment and wraps it with video recording and episode statistics.
+    3. Prepares seeds for the runs.
+    4. Creates a random agent.
+    5. Prepares a custom reward function.
+    6. Iterates over episodes, performing actions and collecting custom rewards.
+    7. Logs the results to a CSV file.
+
+    """
     # Create folder for results
     os.makedirs(FOLDER, exist_ok=True)
     # Define the environment

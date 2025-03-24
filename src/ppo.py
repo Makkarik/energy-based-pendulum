@@ -1,3 +1,5 @@
+"""PPO implementation in PyTorch."""
+
 import numpy as np
 import torch
 import torch.nn as nn
@@ -7,6 +9,19 @@ from torch.utils.data import DataLoader, TensorDataset
 
 
 class PolicyNetwork(nn.Module):
+    """
+    Policy network for PPO.
+
+    Parameters
+    ----------
+    input_dim : int
+        Dimension of the input state.
+    output_dim : int
+        Dimension of the output action.
+    hidden_dim : int, optional
+        Dimension of the hidden layers, by default 64.
+    """
+
     def __init__(self, input_dim: int, output_dim: int, hidden_dim: int = 64):
         super(PolicyNetwork, self).__init__()
         self.fc1 = nn.Linear(input_dim, hidden_dim)
@@ -15,6 +30,21 @@ class PolicyNetwork(nn.Module):
         self.log_std = nn.Parameter(torch.zeros(output_dim))
 
     def forward(self, x):
+        """
+        Forward pass through the network.
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            Input state tensor.
+
+        Returns
+        -------
+        mean : torch.Tensor
+            Mean of the action distribution.
+        std : torch.Tensor
+            Standard deviation of the action distribution.
+        """
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
         mean = self.mean(x)
@@ -22,6 +52,21 @@ class PolicyNetwork(nn.Module):
         return mean, std
 
     def get_action(self, state, deterministic=False):
+        """
+        Get action from the policy network.
+
+        Parameters
+        ----------
+        state : torch.Tensor
+            Input state tensor.
+        deterministic : bool, optional
+            Whether to return a deterministic action, by default False.
+
+        Returns
+        -------
+        action : torch.Tensor
+            Sampled action tensor.
+        """
         mean, std = self.forward(state)
         if deterministic:
             return mean
@@ -31,16 +76,55 @@ class PolicyNetwork(nn.Module):
             return action
 
     def log_prob(self, state, action):
+        """
+        Compute log probability of an action.
+
+        Parameters
+        ----------
+        state : torch.Tensor
+            Input state tensor.
+        action : torch.Tensor
+            Action tensor.
+
+        Returns
+        -------
+        log_prob : torch.Tensor
+            Log probability of the action.
+        """
         mean, std = self.forward(state)
         dist = Normal(mean, std)
         return dist.log_prob(action).sum(dim=-1)
 
     def entropy(self, state):
+        """
+        Compute entropy of the action distribution.
+        
+        Parameters
+        ----------
+        state : torch.Tensor
+            Input state tensor.
+        
+        Returns
+        -------
+        entropy : torch.Tensor
+            Entropy of the action distribution.
+        """
         _, std = self.forward(state)
         return torch.log(std * torch.sqrt(torch.tensor(2 * np.pi * np.e))).sum(dim=-1)
 
 
 class ValueNetwork(nn.Module):
+    """
+    Value network for PPO.
+
+    Parameters
+    ----------
+    input_dim : int
+        Dimension of the input state.
+    hidden_dim : int, optional
+        Dimension of the hidden layers, by default 64.
+    """
+
     def __init__(self, input_dim: int, hidden_dim: int = 64):
         super(ValueNetwork, self).__init__()
         self.fc1 = nn.Linear(input_dim, hidden_dim)
@@ -48,12 +132,53 @@ class ValueNetwork(nn.Module):
         self.fc3 = nn.Linear(hidden_dim, 1)
 
     def forward(self, x):
+        """
+        Forward pass through the network.
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            Input state tensor.
+
+        Returns
+        -------
+        value : torch.Tensor
+            State value.
+        """
+    
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
         return self.fc3(x).squeeze()
 
 
 class PPO:
+    """
+    Proximal Policy Optimization (PPO) algorithm.
+    Parameters
+    ----------
+    state_dim : int
+        Dimension of the state space.
+    action_dim : int
+        Dimension of the action space.
+    hidden_dim : int, optional
+        Number of hidden units in the neural networks (default is 64).
+    lr : float, optional
+        Learning rate for the optimizer (default is 3e-4).
+    gamma : float, optional
+        Discount factor for rewards (default is 0.99).
+    tau : float, optional
+        GAE (Generalized Advantage Estimation) parameter (default is 0.95).
+    clip_param : float, optional
+        Clipping parameter for PPO (default is 0.2).
+    ppo_epochs : int, optional
+        Number of epochs for PPO updates (default is 10).
+    mini_batch_size : int, optional
+        Mini-batch size for PPO updates (default is 64).
+    entropy_coef : float, optional
+        Coefficient for entropy bonus (default is 0.01).
+    value_coef : float, optional
+        Coefficient for value loss (default is 0.5).
+    """
     def __init__(
         self,
         state_dim: int,
@@ -85,6 +210,24 @@ class PPO:
         ])
 
     def _compute_advantages(self, rewards, values, masks):
+        """
+        Compute advantages and returns using Generalized Advantage Estimation (GAE).
+
+        Parameters
+        ----------
+        rewards : torch.Tensor
+            Tensor of rewards.
+        values : torch.Tensor
+            Tensor of value estimates.
+        masks : torch.Tensor
+            Tensor of masks indicating episode boundaries.
+        Returns
+        -------
+        advantages : torch.Tensor
+            Tensor of computed advantages.
+        returns : torch.Tensor
+            Tensor of computed returns.
+        """
         advantages = torch.zeros_like(rewards)
         returns = torch.zeros_like(rewards)
         gae = 0
@@ -104,6 +247,25 @@ class PPO:
         return advantages, returns
 
     def update(self, states, actions, rewards, masks):
+        """
+        Perform a PPO update.
+
+        Parameters
+        ----------
+        states : array-like
+            Array of states.
+        actions : array-like
+            Array of actions.
+        rewards : array-like
+            Array of rewards.
+        masks : array-like
+            Array of masks indicating episode boundaries.
+        Returns
+        -------
+        dict
+            Dictionary containing average policy loss, value loss, entropy, and KL 
+            divergence (for logging only) over the update.
+        """
         states = torch.FloatTensor(states)
         actions = torch.FloatTensor(actions)
         rewards = torch.FloatTensor(rewards)

@@ -44,7 +44,30 @@ def mp4_to_gif(folder: str) -> None:
 
 
 def moving_average(input: np.ndarray, n: int = 500, mode="valid") -> tuple[np.ndarray]:
-    """Get the moving average."""
+    """
+    Calculate the moving average of a given input array.
+
+    Parameters
+    ----------
+    input : np.ndarray
+        The input array for which the moving average is to be calculated.
+    n : int, optional
+        The number of elements to include in the moving average window. Default is 500.
+    mode : str, optional
+        The mode parameter determines the type of convolution. 
+        'valid' returns output of length max(M, N) - min(M, N) + 1. 
+        'same' returns output of length max(M, N). Default is 'valid'.
+
+    Returns
+    -------
+    tuple[np.ndarray]
+        A tuple containing:
+        - steps : np.ndarray
+            The array of step indices corresponding to the moving average values.
+        - output : np.ndarray
+            The array of moving average values.
+
+    """
     output = np.convolve(np.array(input).flatten(), np.ones(n), mode=mode) / n
     if mode == "valid":
         steps = np.arange(output.size) + n // 2
@@ -54,6 +77,30 @@ def moving_average(input: np.ndarray, n: int = 500, mode="valid") -> tuple[np.nd
 
 
 def plot_metrics(model: str, smooth: int = 100, alpha: float = 0.2) -> Figure:
+    """
+    Plots the metrics for a given model.
+
+    Parameters
+    ----------
+    model : str
+        The name of the model to plot metrics for.
+    smooth : int, optional
+        The window size for smoothing the metrics, by default 100.
+    alpha : float, optional
+        The transparency level for the raw data plots, by default 0.2.
+
+    Returns
+    -------
+    Figure
+        The matplotlib figure containing the plotted metrics.
+
+    Notes
+    -----
+    This function reads CSV files containing the metrics for different stages and modes,
+    and plots them in a 2x3 grid of subplots. The metrics are smoothed using a moving 
+    average.
+
+    """
     fig, axes = plt.subplots(2, 3, figsize=(16, 9))
     fig.suptitle(f"{model.upper()} agent metrics", fontsize=20)
     model = model.lower()

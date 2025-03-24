@@ -1,3 +1,5 @@
+"""Tools for training and evaluating PPO and TRPO agents on gymnasium environments."""
+
 import csv
 import os
 from typing import Callable
@@ -21,6 +23,36 @@ def collect_trajectories(
     num_steps: int = 2048,
     seed: int | None = None,
 ):
+    """
+    Collects trajectories by interacting with the environment using the provided agent.
+
+    Parameters
+    ----------
+    env : gym.Env
+        The environment to interact with.
+    agent : PPO or TRPO
+        The agent used to select actions.
+    energy_reward_func : Callable
+        A function to calculate the energy-based reward.
+    num_steps : int, optional
+        The number of steps to collect, by default 2048.
+    seed : int or None, optional
+        Seed for the environment's random number generator, by default None.
+
+    Returns
+    -------
+    dict
+        A dictionary containing the collected trajectories with the following keys:
+        - "states" (np.ndarray): Array of states.
+        - "actions" (np.ndarray): Array of actions.
+        - "rewards" (np.ndarray): Array of rewards.
+        - "energies" (np.ndarray): Array of energy-based rewards.
+        - "masks" (np.ndarray): Array of masks (0 if done, 1 otherwise).
+        - "episode_rewards" (list): List of total rewards per episode.
+        - "episode_energies" (list): List of total energy-based rewards per episode.
+        - "episode_lengths" (list): List of episode lengths.
+
+    """
     states, actions, rewards, dones = [], [], [], []
     energies = []
 
@@ -88,6 +120,32 @@ def train(
     reward_type: str = "reward",
     seed: int | None = None,
 ):
+    """
+    Train a reinforcement learning agent using PPO or TRPO algorithm.
+
+    Parameters
+    ----------
+    env_name : str
+        The name of the environment to train on.
+    agent : PPO or TRPO
+        The agent to be trained.
+    num_epochs : int, optional
+        The number of training epochs (default is 500).
+    steps_per_epoch : int, optional
+        The number of steps per epoch (default is 4096).
+    gamma : float, optional
+        The discount factor (default is 0.99).
+    reward_type : str, optional
+        The type of reward to use for training (default is "reward").
+    seed : int or None, optional
+        The random seed for reproducibility (default is None).
+
+    Returns
+    -------
+    agent
+        The trained agent.
+
+    """
     # Create environment
     env = gym.make(env_name)
 
@@ -170,6 +228,38 @@ def evaluate(
     record_video: bool = True,
     reward_type: str = "reward",
 ):
+    """
+    Evaluate a reinforcement learning agent in a specified environment.
+
+    Parameters
+    ----------
+    env_name : str
+        The name of the environment to evaluate the agent in.
+    agent : PPO | TRPO
+        The agent to be evaluated, which should be an instance of PPO or TRPO.
+    num_episodes : int, optional
+        The number of episodes to run for evaluation (default is 10).
+    record_video : bool, optional
+        Whether to record video of the evaluation episodes (default is True).
+    reward_type : str, optional
+        The type of reward to log (default is "reward").
+
+    Returns
+    -------
+    avg_reward : float
+        The average reward obtained over the evaluation episodes.
+    avg_energy_reward : float
+        The average energy-based reward obtained over the evaluation episodes.
+    avg_length : float
+        The average length of the episodes.
+
+    Notes
+    -----
+    This function creates the environment, runs the specified number of episodes,
+    logs the results to a CSV file, and prints the average metrics. If `record_video`
+    is True, it records the first episode as a video.
+
+    """
     name = agent.__class__.__name__.lower()
 
     # Create environment
@@ -259,6 +349,22 @@ def evaluate(
 
 
 def load_model(path: str, agent: Module) -> Module:
+    """
+    Load a trained model from a checkpoint file.
+
+    Parameters
+    ----------
+    path : str
+        The file path to the checkpoint file.
+    agent : Module
+        The agent module to load the model into.
+
+    Returns
+    -------
+    Module
+        The agent module with the loaded model.
+
+    """
     checkpoint = torch.load(path)
     agent.policy.load_state_dict(checkpoint["policy"])
     agent.value.load_state_dict(checkpoint["value"])

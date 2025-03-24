@@ -4,6 +4,31 @@ ELEMENTS = 3
 CHECK_VALUE = 11.772
 
 class EnergyReward:
+    """
+    A class to calculate the energy-based reward for a reinforcement learning 
+    environment.
+
+    Parameters
+    ----------
+    pole1_length : float, optional
+        The length of the first pole (default is 0.6).
+    pole2_length : float, optional
+        The length of the second pole (default is 0.6).
+    cart_mass : float, optional
+        The mass of the cart (default is 1).
+    pole1_mass : float, optional
+        The mass of the first pole (default is 1).
+    pole2_mass : float, optional
+        The mass of the second pole (default is 1).
+    g : float, optional
+        The gravitational acceleration (default is 9.81).
+
+    Methods
+    -------
+    __call__(observation: np.ndarray) -> float
+        Calculate the energy-based reward given the observation.
+    """
+
     def __init__(
         self,
         pole1_length: float = 0.6,
@@ -13,7 +38,24 @@ class EnergyReward:
         pole2_mass: float = 1,
         g: float = 9.81,
     ):
-        """Init environment hyperparameters."""
+        """
+        Initialize the reward by setting the environment's hyperparameters.
+
+        Parameters
+        ----------
+        pole1_length : float, optional
+            The length of the first pole (default is 0.6).
+        pole2_length : float, optional
+            The length of the second pole (default is 0.6).
+        cart_mass : float, optional
+            The mass of the cart (default is 1).
+        pole1_mass : float, optional
+            The mass of the first pole (default is 1).
+        pole2_mass : float, optional
+            The mass of the second pole (default is 1).
+        g : float, optional
+            The gravitational acceleration (default is 9.81).
+        """
         self._cart_mass = cart_mass
         self._mass1 = pole1_mass
         self._mass2 = pole2_mass
@@ -22,7 +64,19 @@ class EnergyReward:
         self._g = g
 
     def __call__(self, observation: np.ndarray) -> float:
-        """Calculate the energy-based reward."""
+        """
+        Calculate the energy-based reward.
+
+        Parameters
+        ----------
+        observation : np.ndarray
+            The observation array containing the state of the system. It is expected to 
+            have the following elements: [sin1, sin2, cos1, cos2, dx, dtheta1, dtheta2].
+        Returns
+        -------
+        float
+            The calculated energy-based reward.
+        """
         sin1, sin2, cos1, cos2, dx, dtheta1, dtheta2 = observation[1:-1]
 
         e_t = np.zeros(shape=ELEMENTS)
@@ -48,6 +102,7 @@ class EnergyReward:
 
 
 if __name__ == "__main__":
+    # Sanity check
     reward = EnergyReward()
     best_obs = np.zeros(shape=9)
     best_obs[3:5] = 1
