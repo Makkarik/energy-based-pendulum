@@ -55,7 +55,7 @@ def moving_average(input: np.ndarray, n: int = 500, mode="valid") -> tuple[np.nd
 
 def plot_metrics(model: str, smooth: int = 100, alpha: float = 0.2) -> Figure:
     fig, axes = plt.subplots(2, 3, figsize=(16, 9))
-    fig.suptitle(f"{model.upper()} Model Metrics", fontsize=16)
+    fig.suptitle(f"{model.upper()} agent metrics", fontsize=20)
     model = model.lower()
 
     data = {}
@@ -88,7 +88,8 @@ def plot_metrics(model: str, smooth: int = 100, alpha: float = 0.2) -> Figure:
                         linewidth=2,
                         label="Random agent",
                     )
-            ax.set_title(f"Train: {TITLES[col]}")
+            mode_label = "Validation" if stage == "eval" else "Train"
+            ax.set_title(f"{mode_label}: {TITLES[col]}")
             ax.set_xlabel("Episodes")
             ax.set_ylabel(TITLES[col])
             ax.legend()
