@@ -14,7 +14,7 @@ MODES = ["rewards", "energies"]
 STAGES = ["train", "eval"]
 METRICS = ["reward", "energy", "length"]
 TITLES = ["Regular Reward", "Energy Reward", "Episode Length"]
-LIMITS = [10000, 11772, 1000]
+LIMITS = [9360, 11772, 1000]
 
 
 def mp4_to_gif(folder: str) -> None:
