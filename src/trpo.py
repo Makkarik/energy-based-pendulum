@@ -104,7 +104,7 @@ class TRPO:
 
         return advantages, returns
 
-    def _cg(self, Ax, b, iters=10):
+    def _cojugate_gradients(self, Ax, b, iters=10):
         x = torch.zeros_like(b)
         r = b.clone()
         p = b.clone()
@@ -178,7 +178,7 @@ class TRPO:
 
         # Compute search direction with conjugate gradient
         Ax = lambda x: self._hessian_vector_product(states, old_policy, x)  # noqa: E731
-        step_dir = self._cg(Ax, flat_grad, self.cg_iters)
+        step_dir = self._cojugate_gradients(Ax, flat_grad, self.cg_iters)
 
         # Compute step size with line search
         shs = 0.5 * (step_dir * Ax(step_dir)).sum(0, keepdim=True)

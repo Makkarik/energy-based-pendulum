@@ -14,6 +14,7 @@ MODES = ["rewards", "energies"]
 STAGES = ["train", "eval"]
 METRICS = ["reward", "energy", "length"]
 TITLES = ["Regular Reward", "Energy Reward", "Episode Length"]
+LIMITS = [10000, 11772, 1000]
 
 
 def mp4_to_gif(folder: str) -> None:
@@ -52,7 +53,7 @@ def moving_average(input: np.ndarray, n: int = 500, mode="valid") -> tuple[np.nd
     return steps, output
 
 
-def plot_metrics(model: str, smooth: int = 100) -> Figure:
+def plot_metrics(model: str, smooth: int = 100, alpha: float = 0.2) -> Figure:
     fig, axes = plt.subplots(2, 3, figsize=(16, 9))
     fig.suptitle(f"{model.upper()} Model Metrics", fontsize=16)
     model = model.lower()
@@ -69,9 +70,10 @@ def plot_metrics(model: str, smooth: int = 100) -> Figure:
     for row, stage in enumerate(data.keys()):
         for col, metric in enumerate(METRICS):
             ax = axes[row, col]
+            ax.axhline(LIMITS[col], color="k", linestyle="--", label="Metric's limit")
             for color, mode in enumerate(MODES):
                 # Plot raw data
-                ax.plot(data[stage][mode][metric], color=f"C{color}", alpha=0.3)
+                ax.plot(data[stage][mode][metric], color=f"C{color}", alpha=alpha)
                 reward_label = "Regular" if mode == "rewards" else "Energy"
                 ax.plot(
                     *moving_average(data[stage][mode][metric], smooth),
