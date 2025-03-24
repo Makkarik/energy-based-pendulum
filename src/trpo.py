@@ -1,25 +1,11 @@
-import csv
-import os
-
-import gymnasium as gym
-import numpy as np
-import pandas as pd
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributions import Normal
-from tqdm import trange
-
-from .reward import EnergyReward
-
-# Set random seeds for reproducibility
-SEED = 42
-torch.manual_seed(SEED)
-np.random.seed(SEED)
 
 
 class PolicyNetwork(nn.Module):
-    def __init__(self, input_dim, output_dim, hidden_dim=64):
+    def __init__(self, input_dim: int, output_dim: int, hidden_dim: int = 64):
         super(PolicyNetwork, self).__init__()
         self.fc1 = nn.Linear(input_dim, hidden_dim)
         self.fc2 = nn.Linear(hidden_dim, hidden_dim)
@@ -59,7 +45,7 @@ class PolicyNetwork(nn.Module):
 
 
 class ValueNetwork(nn.Module):
-    def __init__(self, input_dim, hidden_dim=64):
+    def __init__(self, input_dim: int, hidden_dim: int = 64):
         super(ValueNetwork, self).__init__()
         self.fc1 = nn.Linear(input_dim, hidden_dim)
         self.fc2 = nn.Linear(hidden_dim, hidden_dim)
@@ -74,21 +60,23 @@ class ValueNetwork(nn.Module):
 class TRPO:
     def __init__(
         self,
-        state_dim,
-        action_dim,
-        hidden_dim=64,
-        gamma=0.99,
-        tau=0.95,
-        delta=0.01,
-        damping=0.1,
-        cg_iters=10,
-        backtrack_iters=10,
-        backtrack_coeff=0.8,
+        state_dim: int,
+        action_dim: int,
+        hidden_dim: int = 64,
+        gamma: float = 0.99,
+        tau: float = 0.95,
+        delta: float = 0.01,
+        damping: float = 0.1,
+        value_updates: int = 5,
+        cg_iters: int = 10,
+        backtrack_iters: int = 10,
+        backtrack_coeff: float = 0.8,
     ):
         self.gamma = gamma
         self.tau = tau
         self.delta = delta
         self.damping = damping
+        self.value_updates = value_updates
         self.cg_iters = cg_iters
         self.backtrack_iters = backtrack_iters
         self.backtrack_coeff = backtrack_coeff
@@ -97,7 +85,7 @@ class TRPO:
         self.value = ValueNetwork(state_dim, hidden_dim)
         self.value_optimizer = torch.optim.Adam(self.value.parameters(), lr=5e-4)
 
-    def compute_advantages(self, rewards, values, masks):
+    def _compute_advantages(self, rewards, values, masks):
         advantages = torch.zeros_like(rewards)
         returns = torch.zeros_like(rewards)
         gae = 0
@@ -116,7 +104,7 @@ class TRPO:
 
         return advantages, returns
 
-    def cg(self, Ax, b, iters=10):
+    def _cg(self, Ax, b, iters=10):
         x = torch.zeros_like(b)
         r = b.clone()
         p = b.clone()
@@ -140,7 +128,7 @@ class TRPO:
 
         return x
 
-    def hessian_vector_product(self, states, old_policy, vector):
+    def _hessian_vector_product(self, states, old_policy, vector):
         kl = self.policy.get_kl(states, old_policy)
 
         grads = torch.autograd.grad(kl, self.policy.parameters(), create_graph=True)
@@ -152,42 +140,45 @@ class TRPO:
 
         return flat_grad_grad_kl
 
-    def surrogate_loss(self, states, actions, advantages, old_log_probs):
+    def _surrogate_loss(self, states, actions, advantages, old_log_probs):
         log_probs = self.policy.log_prob(states, actions)
         ratio = torch.exp(log_probs - old_log_probs)
         return (ratio * advantages).mean()
 
-    def update(self, states, actions, rewards, masks, energy_rewards=None):
+    def update(self, states, actions, rewards, masks):
         states = torch.FloatTensor(states)
         actions = torch.FloatTensor(actions)
         rewards = torch.FloatTensor(rewards)
         masks = torch.FloatTensor(masks)
 
         # Update value function
-        values = self.value(states)
-        advantages, returns = self.compute_advantages(rewards, values, masks)
+        with torch.no_grad():
+            values = self.value(states)
+        advantages, returns = self._compute_advantages(rewards, values, masks)
         advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
 
         # Value loss
-        value_loss = -F.mse_loss(self.value(states), returns)
-        self.value_optimizer.zero_grad()
-        value_loss.backward()
-        self.value_optimizer.step()
+        for _ in range(self.value_updates):
+            value_loss = F.mse_loss(self.value(states), returns)
+            self.value_optimizer.zero_grad()
+            value_loss.backward()
+            self.value_optimizer.step()
 
         # Policy gradient
         old_policy = PolicyNetwork(states.shape[1], actions.shape[1])
         old_policy.load_state_dict(self.policy.state_dict())
 
-        old_log_probs = old_policy.log_prob(states, actions).detach()
+        with torch.no_grad():
+            old_log_probs = old_policy.log_prob(states, actions).detach()
 
         # Compute policy gradient
-        loss = self.surrogate_loss(states, actions, advantages, old_log_probs)
+        loss = self._surrogate_loss(states, actions, advantages, old_log_probs)
         grads = torch.autograd.grad(loss, self.policy.parameters())
         flat_grad = torch.cat([grad.view(-1) for grad in grads])
 
         # Compute search direction with conjugate gradient
-        Ax = lambda x: self.hessian_vector_product(states, old_policy, x)  # noqa: E731
-        step_dir = self.cg(Ax, flat_grad, self.cg_iters)
+        Ax = lambda x: self._hessian_vector_product(states, old_policy, x)  # noqa: E731
+        step_dir = self._cg(Ax, flat_grad, self.cg_iters)
 
         # Compute step size with line search
         shs = 0.5 * (step_dir * Ax(step_dir)).sum(0, keepdim=True)
@@ -213,7 +204,7 @@ class TRPO:
                 idx += param_size
 
             # Compute new loss
-            new_loss = self.surrogate_loss(
+            new_loss = self._surrogate_loss(
                 states, actions, advantages, old_log_probs
             ).item()
 
@@ -237,225 +228,3 @@ class TRPO:
             "kl": self.policy.get_kl(states, old_policy).item(),
             "entropy": -old_log_probs.mean().item(),
         }
-
-
-def collect_trajectories(env, agent, energy_reward_calculator, num_steps=2048):
-    states, actions, rewards, dones = [], [], [], []
-    energy_rewards = []
-
-    state, _ = env.reset(seed=SEED)
-    episode_reward = 0
-    episode_energy_reward = 0
-    episode_length = 0
-    episode_rewards = []
-    episode_energy_rewards = []
-    episode_lengths = []
-
-    for _ in range(num_steps):
-        action = agent.policy.get_action(torch.FloatTensor(state)).detach().numpy()
-
-        next_state, reward, terminated, truncated, _ = env.step(action)
-        done = terminated or truncated
-
-        # Calculate energy-based reward using the provided class
-        energy_reward = energy_reward_calculator(state)
-
-        states.append(state)
-        actions.append(action)
-        rewards.append(reward)
-        energy_rewards.append(energy_reward)
-        dones.append(float(not done))  # Store as mask (0 if done, 1 otherwise)
-
-        episode_reward += reward
-        episode_energy_reward += energy_reward
-        episode_length += 1
-
-        if done:
-            state, _ = env.reset()
-            episode_rewards.append(episode_reward)
-            episode_energy_rewards.append(episode_energy_reward)
-            episode_lengths.append(episode_length)
-            episode_reward = 0
-            episode_energy_reward = 0
-            episode_length = 0
-        else:
-            state = next_state
-
-    if episode_length > 0:  # Add incomplete episode
-        episode_rewards.append(episode_reward)
-        episode_energy_rewards.append(episode_energy_reward)
-        episode_lengths.append(episode_length)
-
-    return {
-        "states": np.array(states),
-        "actions": np.array(actions),
-        "rewards": np.array(rewards),
-        "energy_rewards": np.array(energy_rewards),
-        "masks": np.array(dones),
-        "episode_rewards": episode_rewards,
-        "episode_energy_rewards": episode_energy_rewards,
-        "episode_lengths": episode_lengths,
-    }
-
-
-def train_trpo(
-    env_name, num_epochs=500, steps_per_epoch=4096, gamma=0.99, reward_type='reward'
-):
-    # Create environment
-    env = gym.make(env_name)
-
-    # Get dimensions
-    state_dim = env.observation_space.shape[0]
-    action_dim = env.action_space.shape[0]
-
-    # Create agent
-    agent = TRPO(state_dim, action_dim, gamma=gamma)
-
-    # Create energy reward calculator
-    energy_reward_calculator = EnergyReward()
-    best_reward = -np.inf
-
-    # Create CSV logger
-    os.makedirs("./results", exist_ok=True)
-    csv_file = open(f"./results/trpo-train-{reward_type}.csv", "w", newline="")
-    csv_writer = csv.writer(csv_file)
-    csv_writer.writerow([
-        "epoch",
-        "length",
-        "reward",
-        "energy",
-        "policy_loss",
-        "value_loss",
-        "kl",
-        "entropy",
-    ])
-
-    # Training loop
-    for epoch in trange(num_epochs, desc="TRPO training"):
-        # Collect trajectories
-        trajectories = collect_trajectories(
-            env, agent, energy_reward_calculator, steps_per_epoch
-        )
-
-        # Update agent
-        update_info = agent.update(
-            trajectories["states"],
-            trajectories["actions"],
-            trajectories[reward_type],
-            trajectories["masks"],
-        )
-
-        # Write to CSV
-        for i in range(len(trajectories["episode_lengths"])):
-            csv_writer.writerow([
-                epoch,
-                trajectories["episode_lengths"][i],
-                trajectories["episode_rewards"][i],
-                trajectories["episode_energy_rewards"][i],
-                update_info["policy_loss"],
-                update_info["value_loss"],
-                update_info["kl"],
-                update_info["entropy"],
-            ])
-        csv_file.flush()
-
-        # Save model periodically
-        if np.mean(trajectories["rewards"]) > best_reward:
-            best_reward = np.mean(trajectories["rewards"])
-            torch.save(
-                {
-                    "policy": agent.policy.state_dict(),
-                    "value": agent.value.state_dict(),
-                },
-                "./models/trpo-best.pt",
-            )
-
-    csv_file.close()
-    env.close()
-
-
-def evaluate(env_name, agent, num_episodes=10, record_video=True, reward_type: str = "reward"):
-    # Create environment
-    if record_video:
-        env = gym.make(env_name, render_mode="rgb_array")
-        env = gym.wrappers.RecordVideo(
-            env,
-            "results",
-            episode_trigger=lambda x: x < 1,
-            disable_logger=True,
-            name_prefix="trpo-energy",
-        )
-    else:
-        env = gym.make(env_name)
-
-    # Create energy reward calculator
-    energy_reward_calculator = EnergyReward()
-
-    episode_rewards = []
-    episode_energy_rewards = []
-    episode_lengths = []
-
-    for _ in trange(num_episodes, desc="TRPO evaluation"):
-        state, _ = env.reset(seed=np.random.randint(10000))
-        done = False
-        episode_reward = 0
-        episode_energy_reward = 0
-        episode_length = 0
-
-        while not done:
-            # Use deterministic action for evaluation
-            action = (
-                agent.policy.get_action(torch.FloatTensor(state), deterministic=True)
-                .detach()
-                .numpy()
-            )
-
-            next_state, reward, terminated, truncated, _ = env.step(action)
-            done = terminated or truncated
-
-            # Calculate energy-based reward
-            energy_reward = energy_reward_calculator(state)
-
-            episode_reward += reward
-            episode_energy_reward += energy_reward
-            episode_length += 1
-
-            state = next_state
-
-        episode_rewards.append(episode_reward)
-        episode_energy_rewards.append(episode_energy_reward)
-        episode_lengths.append(episode_length)
-
-    data = pd.DataFrame(columns=["length", "reward", "energy"])
-    data["length"] = episode_lengths
-    data["reward"] = episode_rewards
-    data["energy"] = episode_energy_rewards
-    data.to_csv(f"./results/trpo-eval-{reward_type}.csv", index=False)
-
-    # Calculate average metrics
-    avg_reward = np.mean(episode_rewards)
-    avg_energy_reward = np.mean(episode_energy_rewards)
-    avg_length = np.mean(episode_lengths)
-
-    print(f"Evaluation Results over {num_episodes} episodes:")
-    print(f"Average Episode Length: {avg_length:.2f}")
-    print(f"Average Episode Reward: {avg_reward:.2f}")
-    print(f"Average Episode Energy Reward: {avg_energy_reward:.2f}")
-
-    env.close()
-    return avg_reward, avg_energy_reward, avg_length
-
-
-
-def load_model(path, env_name):
-    env = gym.make(env_name)
-
-    # Get dimensions
-    state_dim = env.observation_space.shape[0]
-    action_dim = env.action_space.shape[0]
-
-    agent = TRPO(state_dim, action_dim)
-    checkpoint = torch.load(path)
-    agent.policy.load_state_dict(checkpoint["policy"])
-    agent.value.load_state_dict(checkpoint["value"])
-    return agent
