@@ -13,7 +13,7 @@ from matplotlib.figure import Figure
 MODES = ["rewards", "energies"]
 STAGES = ["train", "eval"]
 METRICS = ["reward", "energy", "length"]
-TITLES = ["Regular Reward", "Energy Reward", "Episode Length"]
+TITLES = ["Cumulative Regular Reward", "Cumulative Energy Reward", "Episode Length"]
 LIMITS = [9360, 11772, 1000]
 
 
