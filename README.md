@@ -38,6 +38,10 @@ As nobody wants to read the whole article, we have put the results to the README
 
 ![TRPO agent metrics](./results/trpo-metrics.jpg)
 
-It is obvious that the regular reward provides better performance for the TRPO agent and faster training in terms of played episodes, while the energy-based reward is more suitable for the PPO agent. The PPO agent trained with the energy-based reward has a slightly better performance than the same agent trained with the regular reward. For the TRPO agent the case is opposite: the regular reward provides better performance than the energy-based reward.
+It is obvious that the regular reward provides better performance both for the TRPO and PPO agents. Nevertheless, the energy-based reward provides faster training for the PPO agent.
 
 In overall performance, the PPO agent outperforms the TRPO agent in both cases.
+
+Interestingly enough, the nullification of the entropy regularization of the PPO agent makes the regular reward less stable, while the enegry reward remains the same.
+
+![PPO agent zero entropy](./results/ppo-metrics-zero-entropy.jpg)
